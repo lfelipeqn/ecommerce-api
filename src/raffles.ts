@@ -8,7 +8,7 @@ dotenv.config();
 
  const connectDB = async () => {
   const client = new DynamoDBClient({
-    region: 'us-east-1',
+    region: process.env.REGION,
     //endpoint: process.env.HOST_DATABASE /** Omitir endpoint en entorno productivo */
   });
   const ddbDocClient = DynamoDBDocumentClient.from(client);
@@ -42,22 +42,21 @@ const generateRandomTickets = (digitosTicket:number, totalTickets:number) => {
 const createdAt = new Date().getTime();
 const updatedAt = new Date().getTime();
 
-const pageSize:number = 25;
+const pageSize:number = Number(process.env.PAGE_SIZE);
 
 exports.Raffles = async (event:any, context:any, callback:any) => {
-  // You can optionally adjust the number of tickets here
-  const digitosTicket = event?.queryStringParameters.digitosTicket // Read from event if provided
-  const totalTickets = event?.queryStringParameters.totalTickets
+  
+  const body = JSON.parse(event.body);
 
   const raffle = {
     _id:uuidv4(),
-    name: event?.queryStringParameters.name,
-    logo:event?.queryStringParameters.logo || null,
-    description:event?.queryStringParameters.description || null,
-    digitosTicket:event?.queryStringParameters.digitosTicket || 0,
-    totalTickets:event?.queryStringParameters.totalTickets || 0,
-    maxSale:event?.queryStringParameters.maxSale || 0,
-    price:event?.queryStringParameters.price || 0,
+    name: body.name|| '',
+    logo:body.logo || '',
+    description:body.description || '',
+    digitosTicket:body.digitosTicket || 0,
+    totalTickets:body.totalTickets || 0,
+    maxSale:body.maxSale || 0,
+    price:body.price || 0,
     createdAt,
     updatedAt,
   }
@@ -82,9 +81,9 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
 
     const getraffle:any = await client.send(getraffleid)
 
-    let randomTicketsRaffleJSON:any[] = generateRandomTickets(digitosTicket, totalTickets);
+    let randomTicketsRaffleJSON:any[] = generateRandomTickets(raffle.digitosTicket, raffle.totalTickets);
 
-    for(let i=0; i<totalTickets; i++){
+    for(let i=0; i<raffle.totalTickets; i++){
       let randomTicketsRaffle = randomTicketsRaffleJSON[i]
       let tempTicket:any = {
         _id: uuidv4(),
