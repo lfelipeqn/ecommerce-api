@@ -1,14 +1,14 @@
-import * as dotenv from 'dotenv';
+//import * as dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { DynamoDBClient, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
 
-dotenv.config();
+//dotenv.config();
 
  const connectDB = async () => {
   const client = new DynamoDBClient({
-    region: process.env.REGION,
+    region: 'us-east-1',
     //endpoint: process.env.HOST_DATABASE /** Omitir endpoint en entorno productivo */
   });
   const ddbDocClient = DynamoDBDocumentClient.from(client);
@@ -42,7 +42,7 @@ const generateRandomTickets = (digitosTicket:number, totalTickets:number) => {
 const createdAt = new Date().getTime();
 const updatedAt = new Date().getTime();
 
-const pageSize:number = Number(process.env.PAGE_SIZE);
+const pageSize:number = 25;
 
 exports.Raffles = async (event:any, context:any, callback:any) => {
   // You can optionally adjust the number of tickets here
