@@ -9,7 +9,7 @@ dotenv.config();
  const connectDB = async () => {
   const client = new DynamoDBClient({
     region: process.env.REGION,
-    endpoint: process.env.HOST_DATABASE
+    //endpoint: process.env.HOST_DATABASE /** Omitir endpoint en entorno productivo */
   });
   const ddbDocClient = DynamoDBDocumentClient.from(client);
   return ddbDocClient;

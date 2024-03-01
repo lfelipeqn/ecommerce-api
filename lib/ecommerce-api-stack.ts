@@ -20,7 +20,7 @@ export class EcommerceApiStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     } as dynamodb.TableProps)
 
-    const RafflesLamdba = new lambda.Function(this, 'Raffles', {
+    const RafflesLamdba = new lambda.Function(this, 'RafflesLambda', {
       code: lambda.Code.fromAsset('./src'),
       functionName: "Raffles",
       handler: 'raffles.Raffles',
