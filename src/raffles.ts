@@ -1,10 +1,10 @@
-//import * as dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { DynamoDBClient, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
 
-//dotenv.config();
+dotenv.config();
 
  const connectDB = async () => {
   const client = new DynamoDBClient({
