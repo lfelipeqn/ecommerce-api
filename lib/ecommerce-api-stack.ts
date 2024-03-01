@@ -51,5 +51,17 @@ export class EcommerceApiStack extends cdk.Stack {
     RaffleApi.root
     .resourceForPath("raffles")
     .addMethod("POST", new apigateway.LambdaIntegration(RafflesLamdba))
+
+    RaffleApi.root
+    .resourceForPath("raffles/{_id}")
+    .addMethod("GET", new apigateway.LambdaIntegration(RafflesLamdba))
+
+    RaffleApi.root
+    .resourceForPath("raffles")
+    .addMethod("GET", new apigateway.LambdaIntegration(RafflesLamdba))
+
+    RaffleApi.root
+    .resourceForPath("raffles/{_id}")
+    .addMethod("PUT", new apigateway.LambdaIntegration(RafflesLamdba))
   }
 }
