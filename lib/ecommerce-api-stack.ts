@@ -43,8 +43,8 @@ export class EcommerceApiStack extends cdk.Stack {
       }
     });
 
-    RaffleTable.grantReadWriteData(RafflesLamdba)
-    RaffleTicketsTable.grantReadWriteData(RafflesLamdba)
+    RaffleTable.grantFullAccess(RafflesLamdba)
+    RaffleTicketsTable.grantFullAccess(RafflesLamdba)
 
     const RaffleApi = new apigateway.RestApi(this, 'RafflesApi')
 
@@ -61,7 +61,7 @@ export class EcommerceApiStack extends cdk.Stack {
     .addMethod("GET", new apigateway.LambdaIntegration(RafflesLamdba))
 
     RaffleApi.root
-    .resourceForPath("raffles/{_id}")
+    .resourceForPath("raffles")
     .addMethod("PUT", new apigateway.LambdaIntegration(RafflesLamdba))
   }
 }

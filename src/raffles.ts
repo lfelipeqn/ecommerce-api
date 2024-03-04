@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
-import { DynamoDBClient, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, BatchWriteItemCommand, UpdateItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { marshall } from '@aws-sdk/util-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 dotenv.config();
 
@@ -62,11 +62,10 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
   
   let httpMethod:string = event.httpMethod;
   let response:any = {};
-
+  const body = event.body ? JSON.parse(event.body) : null
+  let _id:string | null = event?.queryStringParameters?._id || body?._id || null;
   switch (httpMethod){
     case 'GET':
-     let _id:string | null = event?.queryStringParameters?._id || null;
-      const client = await connectDB();
       if(_id !== undefined && _id !== null){
         const result = new GetCommand({
           TableName: 'Raffles',
@@ -74,6 +73,7 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
             _id: _id
           }
         })
+        const client = await connectDB();
         const raffleRecord:any = await client.send(result)
         response = {
           statusCode:200,
@@ -96,99 +96,150 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
       }
       break;
     case 'POST':
-      const body = JSON.parse(event.body);
-      const raffle = {
-        _id:uuidv4(),
-        name: body.name|| '',
-        logo:body.logo || '',
-        description:body.description || '',
-        digitosTicket:body.digitosTicket || 0,
-        totalTickets:body.totalTickets || 0,
-        maxSale:body.maxSale || 0,
-        price:body.price || 0,
-        createdAt,
-        updatedAt,
-      }
+      if(body !== undefined && body !== null){
+        const raffle = {
+          _id:uuidv4(),
+          name: body.name|| '',
+          logo:body.logo || '',
+          description:body.description || '',
+          digitosTicket:body.digitosTicket || 0,
+          totalTickets:body.totalTickets || 0,
+          maxSale:body.maxSale || 0,
+          price:body.price || 0,
+          createdAt,
+          updatedAt,
+        }
 
-      const raffleTicketsColletion:any[] = [];
-      const PutRequestCollection:any[] = [];
+        const raffleTicketsColletion:any[] = [];
+        const PutRequestCollection:any[] = [];
 
-      try{
-        const result = new PutCommand({
-          TableName: 'Raffles',
-          Item: raffle,
-        })
+        try{
+          const result = new PutCommand({
+            TableName: 'Raffles',
+            Item: raffle,
+          })
 
-        const client = await connectDB();
-        await client.send(result);
+          const client = await connectDB();
+          await client.send(result);
 
-        const getraffleid = new GetCommand({
-          TableName: 'Raffles',Key:{
-            _id: raffle._id
-          }
-        })
-
-        const getraffle:any = await client.send(getraffleid)
-
-        let randomTicketsRaffleJSON:any[] = generateRandomTickets(raffle.digitosTicket, raffle.totalTickets);
-
-        for(let i=0; i<raffle.totalTickets; i++){
-          let randomTicketsRaffle = randomTicketsRaffleJSON[i]
-          let tempTicket:any = {
-            _id: uuidv4(),
-            raffle:getraffle.Item._id,
-            reference:randomTicketsRaffle,
-            price:raffle.price,
-            quantity:1,
-            createdAt,
-            updatedAt,
-          }
-          
-          PutRequestCollection.push({
-            "PutRequest":{
-              "Item":marshall({
-                _id: tempTicket._id,
-                raffle:tempTicket.raffle,
-                reference:tempTicket.reference,
-                price:tempTicket.price,
-                quantity:tempTicket.quantity,
-                createdAt:tempTicket.createdAt,
-                updatedAt:tempTicket.updatedAt,
-              }),
+          const getraffleid = new GetCommand({
+            TableName: 'Raffles',Key:{
+              _id: raffle._id
             }
           })
 
-          raffleTicketsColletion.push(tempTicket);
+          const getraffle:any = await client.send(getraffleid)
 
-        }
+          let randomTicketsRaffleJSON:any[] = generateRandomTickets(raffle.digitosTicket, raffle.totalTickets);
 
-        // Calculate the total number of pages
-        const totalPages = Math.ceil(PutRequestCollection.length / pageSize);
-        // Process the array in pages
-        for (let currentPage = 1; currentPage <= totalPages; currentPage++) {
-          // Calculate the start and end index for the current page
-          const startIndex = (currentPage - 1) * pageSize;
-          const endIndex = currentPage * pageSize;
-          // Get the current page data
-          let currentPageData:any[] = PutRequestCollection.slice(startIndex, endIndex);
-          if (currentPageData.length > 0) {
-            const query = new BatchWriteItemCommand({
-              "RequestItems":{
-                "RaffleTickets":currentPageData
-              }  
+          for(let i=0; i<raffle.totalTickets; i++){
+            let randomTicketsRaffle = randomTicketsRaffleJSON[i]
+            let tempTicket:any = {
+              _id: uuidv4(),
+              raffle:getraffle.Item._id,
+              reference:randomTicketsRaffle,
+              price:raffle.price,
+              quantity:1,
+              createdAt,
+              updatedAt,
+            }
+            
+            PutRequestCollection.push({
+              "PutRequest":{
+                "Item":marshall({
+                  _id: tempTicket._id,
+                  raffle:tempTicket.raffle,
+                  reference:tempTicket.reference,
+                  price:tempTicket.price,
+                  quantity:tempTicket.quantity,
+                  createdAt:tempTicket.createdAt,
+                  updatedAt:tempTicket.updatedAt,
+                }),
+              }
             })
-            await client.send(query);
+
+            raffleTicketsColletion.push(tempTicket);
+
           }
+
+          // Calculate the total number of pages
+          const totalPages = Math.ceil(PutRequestCollection.length / pageSize);
+          // Process the array in pages
+          for (let currentPage = 1; currentPage <= totalPages; currentPage++) {
+            // Calculate the start and end index for the current page
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = currentPage * pageSize;
+            // Get the current page data
+            let currentPageData:any[] = PutRequestCollection.slice(startIndex, endIndex);
+            if (currentPageData.length > 0) {
+              const query = new BatchWriteItemCommand({
+                "RequestItems":{
+                  "RaffleTickets":currentPageData
+                }  
+              })
+              await client.send(query);
+            }
+          }
+        }catch(error){
+          console.log(error);
         }
-      }catch(error){
-        console.log(error);
+
+        response = {
+          statusCode: 200,
+          body: JSON.stringify(raffleTicketsColletion),
+        };
+      }else{
+        response = {
+          statusCode:400,
+          body: JSON.stringify({message:'Se necesita los campos para creacion del registro'})
+        }
       }
+      break;
+    case 'PUT':
+      if(_id !== undefined && _id !== null){
 
-      response = {
-        statusCode: 200,
-        body: JSON.stringify(raffleTicketsColletion),
-      };
+        try{
 
+        const updateExpression:any = ["set updatedAt = :updatedAt"];
+        const expressionAttributeValues:any = { ":updatedAt": updatedAt };
+
+        Object.keys(body).forEach((key) => {
+          if(key!=='_id'){
+            updateExpression.push(`${key} = :${key}`);
+            expressionAttributeValues[`:${key}`] = body[key];
+          }
+        });
+
+        const result = new UpdateItemCommand({
+          TableName: 'Raffles',
+          Key: {
+            _id: { S: _id },
+          },
+          UpdateExpression: updateExpression.join(', '),
+          ExpressionAttributeValues: marshall(expressionAttributeValues),
+          ReturnValues: 'ALL_NEW', 
+        });
+
+          const client = await connectDB();
+          const updateRecords:any = await client.send(result)
+          response = {
+            statusCode:200,
+            body: JSON.stringify(unmarshall(updateRecords.Attributes))
+          }
+        }catch(error){
+          console.log(error)
+          response = {
+            statusCode: 400,
+            body: JSON.stringify({ error}),
+          };
+        }
+      }else{
+        response = {
+          statusCode:400,
+          body: JSON.stringify({message:'Se necesita el _id para realizar para actualizar'})
+        }
+      }
+      break;
   }
   
   return response;
