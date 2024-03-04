@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
-import { DynamoDBClient, BatchWriteItemCommand, UpdateItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, BatchWriteItemCommand, UpdateItemCommand, DeleteItemCommand, DeleteRequest } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
@@ -14,7 +14,15 @@ const client = new DynamoDBClient({
 const ddbDocClient = DynamoDBDocumentClient.from(client);
 return ddbDocClient;
 }
- 
+
+const createBatches = (array:any[], batchSize:number) => {
+  const batches = [];
+  for (let i = 0; i < array.length; i += batchSize) {
+    batches.push(array.slice(i, i + batchSize));
+  }
+  return batches;
+}
+
 const generateRandomTickets = (digitosTicket:number, totalTickets:number) => {
   if (digitosTicket <= 0 || digitosTicket > 16) {
     throw new Error("La cantidad de dígitos debe estar entre 1 y 16.");
@@ -46,10 +54,47 @@ const getAllProducts = async (): Promise<any[]> => {
 
   try {
     const data = await client.send(new ScanCommand(params));
-    return (data.Items as any[]) || [];
+    const allItems = createBatches(data.Items as any[], Number(process.env.PAGE_SIZE));
+    return allItems || [];
   } catch (err) {
     console.error("Error scanning table:", err);
     throw err; // Rethrow the error to handle it in the calling function
+  }
+};
+
+const deleteRaffleTickets = async (client: any, raffleId: string) => {
+  try {
+    const ticketsToDelete = await client.send(new ScanCommand({
+      TableName: 'RaffleTickets',
+      FilterExpression: 'raffle = :raffle',
+      ExpressionAttributeValues: {':raffle': raffleId},
+    }));
+
+    const deleteRequests = ticketsToDelete.Items.map((ticket:any) => ({
+      DeleteRequest: {
+        TableName: 'RaffleTickets',
+        Key: { _id: marshall(ticket._id) },
+      },
+    }));
+
+
+    const deleteRequestBatches = createBatches(deleteRequests, Number(process.env.PAGE_SIZE));
+
+    for (const batch of deleteRequestBatches) {
+      await client.send(new BatchWriteItemCommand({
+        RequestItems: { 'RaffleTickets': batch },
+      }));
+    }
+
+    if (deleteRequests.length > 0) {
+      await client.send(new BatchWriteItemCommand({
+        RequestItems: { 'RaffleTickets': deleteRequests },
+      }));
+    }
+
+  } catch (error: any) {
+    console.error('Error deleting tickets:', error);
+    return;
   }
 };
 
@@ -228,6 +273,38 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
           }
         }catch(error){
           console.log(error)
+          response = {
+            statusCode: 400,
+            body: JSON.stringify({ error}),
+          };
+        }
+      }else{
+        response = {
+          statusCode:400,
+          body: JSON.stringify({message:'Se necesita el _id para realizar para actualizar'})
+        }
+      }
+      break;
+    case 'DELETE':
+      if(_id !== undefined && _id !== null){
+        try{
+
+          const raffle = _id;
+          const client = await connectDB();
+          
+          await deleteRaffleTickets(client, raffle);
+
+          await client.send(new DeleteItemCommand({
+            TableName: 'Raffles',
+            Key: {_id :{ S : _id }}
+          }))
+  
+  
+          response = {
+            statusCode:200,
+            body: JSON.stringify(`Sorteo Eliminado ${raffle}`)
+          }
+        }catch(error){
           response = {
             statusCode: 400,
             body: JSON.stringify({ error}),
