@@ -144,9 +144,14 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
       if(body !== undefined && body !== null){
         const raffle = {
           _id:uuidv4(),
-          name: body.name|| '',
-          logo:body.logo || '',
+          active:body.active || false,
+          category:body.category || '',
+          channel: '',
           description:body.description || '',
+          manufacturer:body.manufacturer || '',
+          name: body.name || '',
+          reference: body.reference || '',
+          seller: body.seller || '',
           digitosTicket:body.digitosTicket || 0,
           totalTickets:body.totalTickets || 0,
           maxSale:body.maxSale || 0,
