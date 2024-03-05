@@ -1,4 +1,4 @@
-const { Raffles } = require('../src/raffles');
+const { Product } = require('../src/product');
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -10,7 +10,7 @@ describe('generateRandomTickets', () => {
       totalTickets: 600
     };
 
-    const response = await Raffles(event, null, null);
+    const response = await Product(event, null, null);
 
     expect(response.statusCode).toBe(200);
     const tickets = JSON.parse(response.body);

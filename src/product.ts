@@ -1,17 +1,17 @@
 import * as dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
-import { DynamoDBClient, BatchWriteItemCommand, UpdateItemCommand, DeleteItemCommand, DeleteRequest } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, BatchWriteItemCommand, UpdateItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 dotenv.config();
 
 const connectDB = async () => {
-const client = new DynamoDBClient({
-  region: process.env.REGION,
-  //endpoint: process.env.HOST_DATABASE /** Omitir endpoint en entorno productivo */
-});
-const ddbDocClient = DynamoDBDocumentClient.from(client);
+  const client = new DynamoDBClient({
+    region: process.env.REGION,
+    //endpoint: process.env.HOST_DATABASE /** Omitir endpoint en entorno productivo */
+  });
+  const ddbDocClient = DynamoDBDocumentClient.from(client);
 return ddbDocClient;
 }
 
@@ -49,11 +49,14 @@ const generateRandomTickets = (digitosTicket:number, totalTickets:number) => {
 const getAllProducts = async (): Promise<any[]> => {
   const client = await connectDB();
   const params = {
-    TableName: 'Raffles',
+    TableName: process.env.PRODUCT,
   };
 
   try {
     const data = await client.send(new ScanCommand(params));
+    if (!data.Items || data.Items.length === 0) {
+      return [];
+    }
     const allItems = createBatches(data.Items as any[], Number(process.env.PAGE_SIZE));
     return allItems || [];
   } catch (err) {
@@ -62,17 +65,17 @@ const getAllProducts = async (): Promise<any[]> => {
   }
 };
 
-const deleteRaffleTickets = async (client: any, raffleId: string) => {
+const deleteProductVariation = async (client: any, productId: string) => {
   try {
     const ticketsToDelete = await client.send(new ScanCommand({
-      TableName: 'RaffleTickets',
-      FilterExpression: 'raffle = :raffle',
-      ExpressionAttributeValues: {':raffle': raffleId},
+      TableName: process.env.PRODUCTVARIATION,
+      FilterExpression: 'product = :product',
+      ExpressionAttributeValues: {':product': productId},
     }));
 
     const deleteRequests = ticketsToDelete.Items.map((ticket:any) => ({
       DeleteRequest: {
-        TableName: 'RaffleTickets',
+        TableName: process.env.PRODUCTVARIATION,
         Key: { _id: marshall(ticket._id) },
       },
     }));
@@ -82,13 +85,13 @@ const deleteRaffleTickets = async (client: any, raffleId: string) => {
 
     for (const batch of deleteRequestBatches) {
       await client.send(new BatchWriteItemCommand({
-        RequestItems: { 'RaffleTickets': batch },
+        RequestItems: { 'productvariation': batch },
       }));
     }
 
     if (deleteRequests.length > 0) {
       await client.send(new BatchWriteItemCommand({
-        RequestItems: { 'RaffleTickets': deleteRequests },
+        RequestItems: { 'productvariation': deleteRequests },
       }));
     }
 
@@ -103,33 +106,33 @@ const updatedAt = new Date().getTime();
 
 const pageSize:number = Number(process.env.PAGE_SIZE);
 
-exports.Raffles = async (event:any, context:any, callback:any) => {
+exports.Product = async (event:any, context:any, callback:any) => {
   
   let httpMethod:string = event.httpMethod;
   let response:any = {};
   const body = event.body ? JSON.parse(event.body) : null
-  let _id:string | null = event?.queryStringParameters?._id || body?._id || null;
+  let _id:string | null = event?.queryStringParameters?._id || event?.pathParameters?._id || body?._id || null;
   switch (httpMethod){
     case 'GET':
       if(_id !== undefined && _id !== null){
         const result = new GetCommand({
-          TableName: 'Raffles',
+          TableName: process.env.PRODUCT,
           Key:{
             _id: _id
           }
         })
         const client = await connectDB();
-        const raffleRecord:any = await client.send(result)
+        const productRecord:any = await client.send(result)
         response = {
           statusCode:200,
-          body: JSON.stringify(raffleRecord.Item)
+          body: JSON.stringify(productRecord.Item)
         }
      }else{
         try{
-          let allRaffleCollection = await getAllProducts();
+          let allProductCollection = await getAllProducts();
           response = {
             statusCode:200,
-            body: JSON.stringify(allRaffleCollection)
+            body: JSON.stringify(allProductCollection)
           }
         }catch(error){
           console.log(error)
@@ -142,7 +145,7 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
       break;
     case 'POST':
       if(body !== undefined && body !== null){
-        const raffle = {
+        const product = {
           _id:uuidv4(),
           active:body.active || false,
           category:body.category || '',
@@ -160,36 +163,39 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
           updatedAt,
         }
 
-        const raffleTicketsColletion:any[] = [];
+        const productVariationColletion:any[] = [];
         const PutRequestCollection:any[] = [];
 
         try{
           const result = new PutCommand({
-            TableName: 'Raffles',
-            Item: raffle,
+            TableName: process.env.PRODUCT,
+            Item: product,
           })
 
           const client = await connectDB();
           await client.send(result);
 
-          const getraffleid = new GetCommand({
-            TableName: 'Raffles',Key:{
-              _id: raffle._id
+          const getproductid = new GetCommand({
+            TableName: process.env.PRODUCT,Key:{
+              _id: product._id
             }
           })
 
-          const getraffle:any = await client.send(getraffleid)
+          const getproduct:any = await client.send(getproductid)
 
-          let randomTicketsRaffleJSON:any[] = generateRandomTickets(raffle.digitosTicket, raffle.totalTickets);
+          let randomTicketsRaffleJSON:any[] = generateRandomTickets(product.digitosTicket, product.totalTickets);
 
-          for(let i=0; i<raffle.totalTickets; i++){
+          for(let i=0; i<product.totalTickets; i++){
             let randomTicketsRaffle = randomTicketsRaffleJSON[i]
             let tempTicket:any = {
               _id: uuidv4(),
-              raffle:getraffle.Item._id,
+              price:product.price,
+              product:getproduct.Item._id,
               reference:randomTicketsRaffle,
-              price:raffle.price,
               quantity:1,
+              seller:product.seller,
+              variation: '', /** Datos pendiente por obtener */
+              warehouses: '', /** Datos pendiente por obtener*/
               createdAt,
               updatedAt,
             }
@@ -198,17 +204,20 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
               "PutRequest":{
                 "Item":marshall({
                   _id: tempTicket._id,
-                  raffle:tempTicket.raffle,
-                  reference:tempTicket.reference,
                   price:tempTicket.price,
+                  product:tempTicket.product,
+                  reference:tempTicket.reference,
                   quantity:tempTicket.quantity,
-                  createdAt:tempTicket.createdAt,
-                  updatedAt:tempTicket.updatedAt,
+                  seller:tempTicket.seller,
+                  variation: tempTicket.variation,
+                  warehouses: tempTicket.warehouses,
+                  createdAt: tempTicket.createdAt,
+                  updatedAt: tempTicket.updatedAt,
                 }),
               }
             })
 
-            raffleTicketsColletion.push(tempTicket);
+            productVariationColletion.push(tempTicket);
 
           }
 
@@ -224,7 +233,7 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
             if (currentPageData.length > 0) {
               const query = new BatchWriteItemCommand({
                 "RequestItems":{
-                  "RaffleTickets":currentPageData
+                  "productvariation":currentPageData
                 }  
               })
               await client.send(query);
@@ -236,7 +245,7 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
 
         response = {
           statusCode: 200,
-          body: JSON.stringify(raffleTicketsColletion),
+          body: JSON.stringify(productVariationColletion),
         };
       }else{
         response = {
@@ -261,7 +270,7 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
         });
 
         const result = new UpdateItemCommand({
-          TableName: 'Raffles',
+          TableName: process.env.PRODUCT,
           Key: {
             _id: { S: _id },
           },
@@ -294,20 +303,20 @@ exports.Raffles = async (event:any, context:any, callback:any) => {
       if(_id !== undefined && _id !== null){
         try{
 
-          const raffle = _id;
+          const productId = _id;
           const client = await connectDB();
           
-          await deleteRaffleTickets(client, raffle);
+          await deleteProductVariation(client, productId);
 
           await client.send(new DeleteItemCommand({
-            TableName: 'Raffles',
+            TableName: process.env.PRODUCT,
             Key: {_id :{ S : _id }}
           }))
   
   
           response = {
             statusCode:200,
-            body: JSON.stringify(`Sorteo Eliminado ${raffle}`)
+            body: JSON.stringify(`Sorteo Eliminado ${productId}`)
           }
         }catch(error){
           response = {

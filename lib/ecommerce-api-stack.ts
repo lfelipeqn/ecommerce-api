@@ -9,63 +9,55 @@ export class EcommerceApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
     
-    const RaffleTable = new dynamodb.Table(this, 'Raffles', {
-      tableName: 'Raffles',
+    const ProductTable = new dynamodb.Table(this, 'product', {
+      tableName: 'product',
       partitionKey: { name: '_id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     } as dynamodb.TableProps)
 
-    const RaffleTicketsTable = new dynamodb.Table(this, 'RaffleTickets', {
-      tableName: 'RaffleTickets',
+    const ProductVariationTable = new dynamodb.Table(this, 'productvariation', {
+      tableName: 'productvariation',
       partitionKey: { name: '_id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
     } as dynamodb.TableProps)
 
-    const RafflesLamdba = new nodejs.NodejsFunction(this, 'RafflesLambda', {
-      entry:'./src/raffles.ts', 
-      functionName: "Raffles",
-      handler: 'Raffles',
+    const ProductLamdba = new nodejs.NodejsFunction(this, 'ProductLambda', {
+      entry:'./src/product.ts', 
+      functionName: "Product",
+      handler: 'Product',
       memorySize: 1024,
       runtime: lambda.Runtime.NODEJS_18_X,
       timeout: cdk.Duration.seconds(300),
       bundling: {
         preCompilation: true,
-        define: { // Replace strings during build time
-          'process.env.REGION': JSON.stringify('us-east-1'),
-          'process.env.PAGE_SIZE': JSON.stringify(25),
-        },
       },
       environment:{
         REGION: 'us-east-1',
         PAGE_SIZE: '25',
-        RAFFLES:RaffleTable.tableName,
-        RAFFLETICKETS:RaffleTicketsTable.tableName
+        PRODUCT:ProductTable.tableName,
+        PRODUCTVARIATION:ProductVariationTable.tableName
       }
     });
 
-    RaffleTable.grantFullAccess(RafflesLamdba)
-    RaffleTicketsTable.grantFullAccess(RafflesLamdba)
+    ProductTable.grantFullAccess(ProductLamdba)
+    ProductVariationTable.grantFullAccess(ProductLamdba)
 
-    const RaffleApi = new apigateway.RestApi(this, 'RafflesApi')
+    const EccommerceAPI = new apigateway.RestApi(this, 'EcommerceAPI')
 
-    RaffleApi.root
-    .resourceForPath("raffles")
-    .addMethod("POST", new apigateway.LambdaIntegration(RafflesLamdba))
+    EccommerceAPI.root
+    .resourceForPath("product")
+    .addMethod("POST", new apigateway.LambdaIntegration(ProductLamdba))
 
-    RaffleApi.root
-    .resourceForPath("raffles/{_id}")
-    .addMethod("GET", new apigateway.LambdaIntegration(RafflesLamdba))
+    EccommerceAPI.root
+    .resourceForPath("product")
+    .addMethod("GET", new apigateway.LambdaIntegration(ProductLamdba))
 
-    RaffleApi.root
-    .resourceForPath("raffles")
-    .addMethod("GET", new apigateway.LambdaIntegration(RafflesLamdba))
+    EccommerceAPI.root
+    .resourceForPath("product")
+    .addMethod("PUT", new apigateway.LambdaIntegration(ProductLamdba))
 
-    RaffleApi.root
-    .resourceForPath("raffles")
-    .addMethod("PUT", new apigateway.LambdaIntegration(RafflesLamdba))
-
-    RaffleApi.root
-    .resourceForPath("raffles")
-    .addMethod("DELETE", new apigateway.LambdaIntegration(RafflesLamdba))
+    EccommerceAPI.root
+    .resourceForPath("product")
+    .addMethod("DELETE", new apigateway.LambdaIntegration(ProductLamdba))
   }
 }
